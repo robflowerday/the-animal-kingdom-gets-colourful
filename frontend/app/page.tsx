@@ -28,7 +28,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:8000/api/color', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/color`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ word: word.trim() }),

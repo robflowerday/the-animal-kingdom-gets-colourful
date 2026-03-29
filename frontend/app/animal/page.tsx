@@ -85,7 +85,7 @@ export default function AnimalPage() {
     setError(null);
     setImageUrl(null);
     try {
-      const res = await fetch('http://localhost:8000/api/animal', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/animal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim() }),
