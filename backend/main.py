@@ -5,8 +5,21 @@ import hashlib
 import colorsys
 import webcolors
 import random
+import os
+import json
 from typing import Optional
 from animals import ANIMALS
+
+try:
+    import google.generativeai as genai
+    _gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if _gemini_key:
+        genai.configure(api_key=_gemini_key)
+        _gemini = genai.GenerativeModel("gemini-2.0-flash")
+    else:
+        _gemini = None
+except ImportError:
+    _gemini = None
 
 app = FastAPI()
 
@@ -360,10 +373,54 @@ def get_word_color(request: WordRequest):
     )
 
 
+def _animal_from_llm(name: str) -> AnimalResponse | None:
+    if not _gemini:
+        return None
+    try:
+        prompt = f"""You are an expert zoologist with a poetic soul.
+Given the name "{name}", choose the single most fitting animal for that person and return ONLY a JSON object with these exact keys:
+
+{{
+  "name": "Common Name",
+  "scientific_name": "Genus species",
+  "animal_id": "snake_case_id",
+  "hex": "#RRGGBB",
+  "why": "2-3 sentence poetic explanation of why this name matches this animal",
+  "origin": "Geographic origin / native range",
+  "habitat": "Habitat description",
+  "speed": "Speed / movement facts",
+  "colours": "Colour description",
+  "weight": "Weight range",
+  "gender": "Reproduction / gender notes",
+  "facts": ["fact 1", "fact 2", "fact 3", "fact 4", "fact 5"]
+}}
+
+Rules:
+- hex must be a colour strongly associated with the animal
+- why must feel personal and poetic, as if written for someone called "{name}"
+- facts must be genuinely interesting and accurate
+- Return ONLY the JSON object, no markdown, no commentary"""
+
+        response = _gemini.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"},
+        )
+        data = json.loads(response.text)
+        return AnimalResponse(**data)
+    except Exception:
+        return None
+
+
 @app.post("/api/animal", response_model=AnimalResponse)
 def get_animal(request: NameRequest):
-    name = request.name.lower().strip()
-    idx = int(hashlib.sha256(name.encode()).hexdigest()[:8], 16) % len(ANIMALS)
+    name = request.name.strip()
+
+    result = _animal_from_llm(name)
+    if result:
+        return result
+
+    # Fallback: pick deterministically from the hardcoded list
+    idx = int(hashlib.sha256(name.lower().encode()).hexdigest()[:8], 16) % len(ANIMALS)
     animal = ANIMALS[idx]
     return AnimalResponse(
         name=animal["name"],
